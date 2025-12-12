@@ -1,10 +1,10 @@
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using WallyAnmSpinzor.Internal;
 
 namespace WallyAnmSpinzor.Version_904;
 
+// Official name: AnimMove
 public sealed class AnmAnimation_904
 {
     public required string Name { get; set; }
@@ -13,7 +13,7 @@ public sealed class AnmAnimation_904
     public required uint FreeStart { get; set; }
     public required uint PreviewFrame { get; set; }
     public required uint BaseStart { get; set; }
-    public required uint[] Data { get; set; }
+    public required uint[] RunEndFrames { get; set; }
     public required AnmFrame_904[] Frames { get; set; }
 
     internal static AnmAnimation_904 CreateFrom(DataReader reader)
@@ -25,12 +25,11 @@ public sealed class AnmAnimation_904
         uint freeStart = reader.ReadU32();
         uint previewFrame = reader.ReadU32();
         uint baseStart = reader.ReadU32();
-        uint dataSize = reader.ReadU32();
-        uint[] data = new uint[dataSize];
-
-        for (int i = 0; i < dataSize; ++i)
+        uint runEndFramesCount = reader.ReadU32();
+        uint[] runEndFrames = new uint[runEndFramesCount];
+        for (int i = 0; i < runEndFramesCount; ++i)
         {
-            data[i] = reader.ReadU32();
+            runEndFrames[i] = reader.ReadU32();
         }
         // this discarded value tells the game what's the size of the frames field.
         // this is used to be able to load the frames on-demand.
@@ -50,7 +49,7 @@ public sealed class AnmAnimation_904
             FreeStart = freeStart,
             PreviewFrame = previewFrame,
             BaseStart = baseStart,
-            Data = data,
+            RunEndFrames = runEndFrames,
             Frames = frames,
         };
     }
@@ -64,11 +63,11 @@ public sealed class AnmAnimation_904
         uint freeStart = await reader.ReadU32Async(ctoken);
         uint previewFrame = await reader.ReadU32Async(ctoken);
         uint baseStart = await reader.ReadU32Async(ctoken);
-        uint dataSize = await reader.ReadU32Async(ctoken);
-        uint[] data = new uint[dataSize];
-        for (int i = 0; i < dataSize; ++i)
+        uint runEndFramesCount = await reader.ReadU32Async(ctoken);
+        uint[] runEndFrames = new uint[runEndFramesCount];
+        for (int i = 0; i < runEndFramesCount; ++i)
         {
-            data[i] = await reader.ReadU32Async(ctoken);
+            runEndFrames[i] = await reader.ReadU32Async(ctoken);
         }
         // this discarded value tells the game what's the size of the frames field.
         // this is used to be able to load the frames on-demand.
@@ -88,7 +87,7 @@ public sealed class AnmAnimation_904
             FreeStart = freeStart,
             PreviewFrame = previewFrame,
             BaseStart = baseStart,
-            Data = data,
+            RunEndFrames = runEndFrames,
             Frames = frames,
         };
     }
@@ -102,8 +101,8 @@ public sealed class AnmAnimation_904
         writer.WriteU32(FreeStart);
         writer.WriteU32(PreviewFrame);
         writer.WriteU32(BaseStart);
-        writer.WriteU32((uint)Data.Length);
-        foreach (uint datum in Data)
+        writer.WriteU32((uint)RunEndFrames.Length);
+        foreach (uint datum in RunEndFrames)
         {
             writer.WriteU32(datum);
         }
@@ -124,8 +123,8 @@ public sealed class AnmAnimation_904
         await writer.WriteU32Async(FreeStart, ctoken);
         await writer.WriteU32Async(PreviewFrame, ctoken);
         await writer.WriteU32Async(BaseStart, ctoken);
-        await writer.WriteU32Async((uint)Data.Length, ctoken);
-        foreach (uint datum in Data)
+        await writer.WriteU32Async((uint)RunEndFrames.Length, ctoken);
+        foreach (uint datum in RunEndFrames)
         {
             await writer.WriteU32Async(datum, ctoken);
         }

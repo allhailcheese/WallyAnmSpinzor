@@ -1,11 +1,11 @@
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using WallyAnmSpinzor.Internal;
 
 namespace WallyAnmSpinzor;
 
+// Official name: AnimFrame
 public sealed class AnmFrame
 {
     public required short Id { get; set; }

@@ -1,11 +1,11 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using WallyAnmSpinzor.Internal;
 
 namespace WallyAnmSpinzor.Version_904;
 
+// Official name: AnimDef
 public sealed class AnmClass_904
 {
     public required string Index { get; set; }

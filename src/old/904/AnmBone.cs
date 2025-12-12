@@ -1,11 +1,11 @@
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using WallyAnmSpinzor.Internal;
 
 namespace WallyAnmSpinzor.Version_904;
 
+// Official name: BoneDef
 public sealed class AnmBone_904
 {
     public required short Id { get; set; }
