@@ -7,32 +7,27 @@ using WallyAnmSpinzor;
 
 internal class Sample
 {
-    public static async Task SerializeToJson(string filePath, string outputPath)
+    private static readonly JsonSerializerOptions JSON_OPTIONS = new()
     {
-        JsonSerializerOptions options = new()
-        {
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
-            WriteIndented = true,
-        };
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
+        WriteIndented = true,
+    };
 
+    public static async Task SerializeToJson(AnmVersionEnum version, string filePath, string outputPath)
+    {
         AnmFile anm;
         using (FileStream file = new(filePath, FileMode.Open, FileAccess.Read))
-            anm = await AnmFile.CreateFromAsync(file);
+            anm = await AnmFile.CreateFromAsync(version, file);
         using (FileStream outFile = new(outputPath, FileMode.Create, FileAccess.Write))
-            await JsonSerializer.SerializeAsync(outFile, anm, options);
+            await JsonSerializer.SerializeAsync(outFile, anm, JSON_OPTIONS);
     }
 
-    public static async Task JsonToAnm(string jsonPath, string outputPath)
+    public static async Task JsonToAnm(AnmVersionEnum version, string jsonPath, string outputPath)
     {
-        JsonSerializerOptions options = new()
-        {
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
-            WriteIndented = true,
-        };
         AnmFile anm;
         using (FileStream file = new(jsonPath, FileMode.Open, FileAccess.Read))
-            anm = await JsonSerializer.DeserializeAsync<AnmFile>(file, options) ?? throw new Exception("bad json format");
+            anm = await JsonSerializer.DeserializeAsync<AnmFile>(file, JSON_OPTIONS) ?? throw new Exception("bad json format");
         using (FileStream outFile = new(outputPath, FileMode.Create, FileAccess.Write))
-            await anm.WriteToAsync(outFile);
+            await anm.WriteToAsync(version, outFile);
     }
 }

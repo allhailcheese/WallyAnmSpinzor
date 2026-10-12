@@ -8,26 +8,27 @@ namespace WallyAnmSpinzor;
 // Official name: BoneDef
 public sealed class AnmBone
 {
-    public required short Id { get; set; }
-    public required float ScaleX { get; set; }
-    public required float RotateSkew0 { get; set; }
-    public required float RotateSkew1 { get; set; }
-    public required float ScaleY { get; set; }
-    public required float X { get; set; }
-    public required float Y { get; set; }
+    public required uint Id { get; set; }
+    public required double ScaleX { get; set; }
+    public required double RotateSkew0 { get; set; }
+    public required double RotateSkew1 { get; set; }
+    public required double ScaleY { get; set; }
+    public required double X { get; set; }
+    public required double Y { get; set; }
     public required double Opacity { get; set; }
-    public required sbyte Frame { get; set; }
+    public required short Frame { get; set; }
 
-    internal static AnmBone CreateFrom(DataReader reader, AnmBone? prev)
+    internal static AnmBone CreateFrom(AnmVersionEnum version, DataReader reader, AnmBone? prev)
     {
-        short id = reader.ReadI16();
+        uint id = (uint)reader.ReadI16();
         bool opaque = reader.ReadBool();
 
-        float scaleX, rotateSkew0, rotateSkew1, scaleY;
+        double scaleX, rotateSkew0, rotateSkew1, scaleY;
         // copy transform from prev
-        if (reader.ReadBool())
+        if (version >= AnmVersionEnum.From904ToCurrent && reader.ReadBool())
         {
-            if (prev is null) throw new Exception("Bone copies transform from previous, but there is no previous bone");
+            if (prev is null)
+                throw new Exception("Bone copies transform from previous, but there is no previous bone");
             scaleX = prev.ScaleX;
             rotateSkew0 = prev.RotateSkew0;
             rotateSkew1 = prev.RotateSkew1;
@@ -50,8 +51,8 @@ public sealed class AnmBone
             }
             else
             {
-                scaleX = reader.ReadF32();
-                rotateSkew0 = reader.ReadF32();
+                scaleX = reader.ReadBoneTransform(version);
+                rotateSkew0 = reader.ReadBoneTransform(version);
                 if (symmetric)
                 {
                     rotateSkew1 = rotateSkew0;
@@ -59,29 +60,30 @@ public sealed class AnmBone
                 }
                 else
                 {
-                    rotateSkew1 = reader.ReadF32();
-                    scaleY = reader.ReadF32();
+                    rotateSkew1 = reader.ReadBoneTransform(version);
+                    scaleY = reader.ReadBoneTransform(version);
                 }
             }
         }
 
-        float x, y;
+        double x, y;
         // copy position from prev
-        if (reader.ReadBool())
+        if (version >= AnmVersionEnum.From904ToCurrent && reader.ReadBool())
         {
-            if (prev is null) throw new Exception("Bone copies position from previous, but there is no previous bone");
+            if (prev is null)
+                throw new Exception("Bone copies position from previous, but there is no previous bone");
             x = prev.X;
             y = prev.Y;
         }
         else
         {
-            x = reader.ReadF32();
-            y = reader.ReadF32();
+            x = reader.ReadBoneTransform(version);
+            y = reader.ReadBoneTransform(version);
         }
 
-        sbyte frame = 1;
-        if (reader.ReadBool())
-            frame = reader.ReadI8();
+        short frame = 1;
+        if (version < AnmVersionEnum.From904ToCurrent || reader.ReadBool())
+            frame = reader.ReadBoneFrame(version);
 
         double opacity = 1.0;
         if (!opaque)
@@ -101,16 +103,17 @@ public sealed class AnmBone
         };
     }
 
-    internal static async Task<AnmBone> CreateFromAsync(DataReader reader, AnmBone? prev, CancellationToken ctoken = default)
+    internal static async Task<AnmBone> CreateFromAsync(AnmVersionEnum version, DataReader reader, AnmBone? prev, CancellationToken ctoken = default)
     {
-        short id = await reader.ReadI16Async(ctoken);
+        uint id = (uint)await reader.ReadI16Async(ctoken);
         bool opaque = await reader.ReadBoolAsync(ctoken);
 
-        float scaleX, rotateSkew0, rotateSkew1, scaleY;
+        double scaleX, rotateSkew0, rotateSkew1, scaleY;
         // copy transform from prev
-        if (await reader.ReadBoolAsync(ctoken))
+        if (version >= AnmVersionEnum.From904ToCurrent && await reader.ReadBoolAsync(ctoken))
         {
-            if (prev is null) throw new Exception("Bone copies transform from previous, but there is no previous bone");
+            if (prev is null)
+                throw new Exception("Bone copies transform from previous, but there is no previous bone");
             scaleX = prev.ScaleX;
             rotateSkew0 = prev.RotateSkew0;
             rotateSkew1 = prev.RotateSkew1;
@@ -133,8 +136,8 @@ public sealed class AnmBone
             }
             else
             {
-                scaleX = await reader.ReadF32Async(ctoken);
-                rotateSkew0 = await reader.ReadF32Async(ctoken);
+                scaleX = await reader.ReadBoneTransformAsync(version, ctoken);
+                rotateSkew0 = await reader.ReadBoneTransformAsync(version, ctoken);
                 if (symmetric)
                 {
                     rotateSkew1 = rotateSkew0;
@@ -142,29 +145,30 @@ public sealed class AnmBone
                 }
                 else
                 {
-                    rotateSkew1 = await reader.ReadF32Async(ctoken);
-                    scaleY = await reader.ReadF32Async(ctoken);
+                    rotateSkew1 = await reader.ReadBoneTransformAsync(version, ctoken);
+                    scaleY = await reader.ReadBoneTransformAsync(version, ctoken);
                 }
             }
         }
 
-        float x, y;
+        double x, y;
         // copy position from prev
-        if (await reader.ReadBoolAsync(ctoken))
+        if (version >= AnmVersionEnum.From904ToCurrent && await reader.ReadBoolAsync(ctoken))
         {
-            if (prev is null) throw new Exception("Bone copies position from previous, but there is no previous bone");
+            if (prev is null)
+                throw new Exception("Bone copies position from previous, but there is no previous bone");
             x = prev.X;
             y = prev.Y;
         }
         else
         {
-            x = await reader.ReadF32Async(ctoken);
-            y = await reader.ReadF32Async(ctoken);
+            x = await reader.ReadBoneTransformAsync(version, ctoken);
+            y = await reader.ReadBoneTransformAsync(version, ctoken);
         }
 
-        sbyte frame = 1;
-        if (await reader.ReadBoolAsync(ctoken))
-            frame = await reader.ReadI8Async(ctoken);
+        short frame = 1;
+        if (version < AnmVersionEnum.From904ToCurrent || await reader.ReadBoolAsync(ctoken))
+            frame = await reader.ReadBoneFrameAsync(version, ctoken);
 
         double opacity = 1.0;
         if (!opaque)
@@ -184,19 +188,16 @@ public sealed class AnmBone
         };
     }
 
-    internal void WriteTo(DataWriter writer, AnmBone? prev)
+    internal void WriteTo(AnmVersionEnum version, DataWriter writer, AnmBone? prev)
     {
-        writer.WriteI16(Id);
+        writer.WriteI16((short)Id);
         writer.WriteBool(Opacity == 1);
 
-        if (prev is not null && HasSameTransformAs(prev))
+        bool canCopyTransform = prev is not null && HasSameTransformAs(prev);
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            writer.WriteBool(canCopyTransform);
+        if (version < AnmVersionEnum.From904ToCurrent || !canCopyTransform)
         {
-            writer.WriteBool(true);
-        }
-        else
-        {
-            writer.WriteBool(false);
-
             bool identity = IsIdentity;
             bool symmetric = IsSymmetric;
             if (identity || symmetric)
@@ -211,36 +212,30 @@ public sealed class AnmBone
 
             if (!identity)
             {
-                writer.WriteF32(ScaleX);
-                writer.WriteF32(RotateSkew0);
+                writer.WriteBoneTransform(version, ScaleX);
+                writer.WriteBoneTransform(version, RotateSkew0);
                 if (!symmetric)
                 {
-                    writer.WriteF32(RotateSkew1);
-                    writer.WriteF32(ScaleY);
+                    writer.WriteBoneTransform(version, RotateSkew1);
+                    writer.WriteBoneTransform(version, ScaleY);
                 }
             }
         }
 
-        if (prev is not null && HasSamePositionAs(prev))
+        bool canCopyPosition = prev is not null && HasSamePositionAs(prev);
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            writer.WriteBool(canCopyPosition);
+        if (version < AnmVersionEnum.From904ToCurrent || !canCopyPosition)
         {
-            writer.WriteBool(true);
-        }
-        else
-        {
-            writer.WriteBool(false);
-            writer.WriteF32(X);
-            writer.WriteF32(Y);
+            writer.WriteBoneTransform(version, X);
+            writer.WriteBoneTransform(version, Y);
         }
 
-        if (Frame == 1)
-        {
-            writer.WriteBool(false);
-        }
-        else
-        {
-            writer.WriteBool(true);
-            writer.WriteI8(Frame);
-        }
+        bool canDefaultFrame = Frame == 1;
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            writer.WriteBool(canDefaultFrame);
+        if (version < AnmVersionEnum.From904ToCurrent || !canDefaultFrame)
+            writer.WriteBoneFrame(version, Frame);
 
         if (Opacity != 1)
         {
@@ -249,19 +244,16 @@ public sealed class AnmBone
         }
     }
 
-    internal async Task WriteToAsync(DataWriter writer, AnmBone? prev, CancellationToken ctoken = default)
+    internal async Task WriteToAsync(AnmVersionEnum version, DataWriter writer, AnmBone? prev, CancellationToken ctoken = default)
     {
-        await writer.WriteI16Async(Id, ctoken);
+        await writer.WriteI16Async((short)Id, ctoken);
         await writer.WriteBoolAsync(Opacity == 1, ctoken);
 
-        if (prev is not null && HasSameTransformAs(prev))
+        bool canCopyTransform = prev is not null && HasSameTransformAs(prev);
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            await writer.WriteBoolAsync(canCopyTransform, ctoken);
+        if (version < AnmVersionEnum.From904ToCurrent || !canCopyTransform)
         {
-            await writer.WriteBoolAsync(true, ctoken);
-        }
-        else
-        {
-            await writer.WriteBoolAsync(false, ctoken);
-
             bool identity = IsIdentity;
             bool symmetric = IsSymmetric;
             if (identity || symmetric)
@@ -276,36 +268,30 @@ public sealed class AnmBone
 
             if (!identity)
             {
-                await writer.WriteF32Async(ScaleX, ctoken);
-                await writer.WriteF32Async(RotateSkew0, ctoken);
+                await writer.WriteBoneTransformAsync(version, ScaleX, ctoken);
+                await writer.WriteBoneTransformAsync(version, RotateSkew0, ctoken);
                 if (!symmetric)
                 {
-                    await writer.WriteF32Async(RotateSkew1, ctoken);
-                    await writer.WriteF32Async(ScaleY, ctoken);
+                    await writer.WriteBoneTransformAsync(version, RotateSkew1, ctoken);
+                    await writer.WriteBoneTransformAsync(version, ScaleY, ctoken);
                 }
             }
         }
 
-        if (prev is not null && HasSamePositionAs(prev))
+        bool canCopyPosition = prev is not null && HasSamePositionAs(prev);
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            await writer.WriteBoolAsync(canCopyPosition, ctoken);
+        if (version < AnmVersionEnum.From904ToCurrent || !canCopyPosition)
         {
-            await writer.WriteBoolAsync(true, ctoken);
-        }
-        else
-        {
-            await writer.WriteBoolAsync(false, ctoken);
-            await writer.WriteF32Async(X, ctoken);
-            await writer.WriteF32Async(Y, ctoken);
+            await writer.WriteBoneTransformAsync(version, X, ctoken);
+            await writer.WriteBoneTransformAsync(version, Y, ctoken);
         }
 
-        if (Frame == 1)
-        {
-            await writer.WriteBoolAsync(false, ctoken);
-        }
-        else
-        {
-            await writer.WriteBoolAsync(true, ctoken);
-            await writer.WriteI8Async(Frame, ctoken);
-        }
+        bool canDefaultFrame = Frame == 1;
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            await writer.WriteBoolAsync(canDefaultFrame, ctoken);
+        if (version < AnmVersionEnum.From904ToCurrent || !canDefaultFrame)
+            await writer.WriteBoneFrameAsync(version, Frame, ctoken);
 
         if (Opacity != 1)
         {
@@ -314,14 +300,17 @@ public sealed class AnmBone
         }
     }
 
-    internal uint GetByteCount(AnmBone? prev)
+    internal uint GetByteCount(AnmVersionEnum version, AnmBone? prev)
     {
         uint size = 0;
         size += sizeof(ushort); // id
         size += sizeof(byte); // opaque
 
-        size += sizeof(byte); // copy transform indicator
-        if (prev is null || !HasSameTransformAs(prev)) // can't copy transform
+        // copy transform indicator
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            size += sizeof(byte);
+        // can't copy transform
+        if (version < AnmVersionEnum.From904ToCurrent || prev is null || !HasSameTransformAs(prev))
         {
             size += sizeof(byte); // identity/symmetric indicator
             if (IsIdentity)
@@ -330,33 +319,63 @@ public sealed class AnmBone
             }
             else
             {
-                size += sizeof(float); // scaleX
-                size += sizeof(float); // rotateSkew0
+                size += GetBoneTransformByteSize(version); // scaleX
+                size += GetBoneTransformByteSize(version); // rotateSkew0
                 if (IsSymmetric)
                 {
                     size += sizeof(byte); // 2nd indicator
                 }
                 else
                 {
-                    size += sizeof(float); // rotateSkew1
-                    size += sizeof(float); // scaleY
+                    size += GetBoneTransformByteSize(version); // rotateSkew1
+                    size += GetBoneTransformByteSize(version); // scaleY
                 }
             }
         }
 
-        size += sizeof(byte); // copy position indicator
-        if (prev is null || !HasSamePositionAs(prev)) // can't copy position
+        // copy position indicator
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            size += sizeof(byte);
+        // can't copy position
+        if (version < AnmVersionEnum.From904ToCurrent || prev is null || !HasSamePositionAs(prev))
         {
-            size += sizeof(float); // x
-            size += sizeof(float); // y
+            size += GetBoneTransformByteSize(version); // x
+            size += GetBoneTransformByteSize(version); // y
         }
 
-        size += sizeof(byte); // default frame indicator
-        if (Frame != 1) size += sizeof(sbyte); // frame
+        // default frame indicator
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            size += sizeof(byte);
+        if (version < AnmVersionEnum.From904ToCurrent || Frame != 1)
+            size += GetBoneFrameByteSize(version); // frame
 
         if (Opacity != 1) size += sizeof(byte); // opacity
 
         return size;
+    }
+
+    internal static uint GetBoneFrameByteSize(AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From904ToCurrent)
+        {
+            return sizeof(sbyte);
+        }
+        else
+        {
+            return sizeof(short);
+        }
+    }
+
+    internal static uint GetBoneTransformByteSize(AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From710To904)
+        {
+            return sizeof(float);
+        }
+        else
+        {
+            return sizeof(double);
+        }
     }
 
     internal AnmBone Clone() => new()

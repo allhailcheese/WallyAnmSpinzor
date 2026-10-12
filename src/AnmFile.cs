@@ -14,36 +14,36 @@ public sealed class AnmFile
     public required int Header { get; set; }
     public required Dictionary<string, AnmClass> Classes { get; set; }
 
-    public static AnmFile CreateFrom(Stream stream, bool leaveOpen = false)
+    public static AnmFile CreateFrom(AnmVersionEnum version, Stream stream, bool leaveOpen = false)
     {
         int header = ReadHeader(stream);
         using ZLibStream decompressedStream = new(stream, CompressionMode.Decompress, leaveOpen);
         using DataReader reader = new(decompressedStream, leaveOpen);
-        return CreateFromInternal(reader, header);
+        return CreateFromInternal(version, reader, header);
     }
 
-    public static async Task<AnmFile> CreateFromAsync(Stream stream, bool leaveOpen = false, CancellationToken ctoken = default)
+    public static async Task<AnmFile> CreateFromAsync(AnmVersionEnum version, Stream stream, bool leaveOpen = false, CancellationToken ctoken = default)
     {
         int header = await ReadHeaderAsync(stream, ctoken);
         using ZLibStream decompressedStream = new(stream, CompressionMode.Decompress, leaveOpen);
         using DataReader reader = new(decompressedStream, leaveOpen);
-        return await CreateFromInternalAsync(reader, header, ctoken);
+        return await CreateFromInternalAsync(version, reader, header, ctoken);
     }
 
-    public void WriteTo(Stream stream, bool leaveOpen = false)
+    public void WriteTo(AnmVersionEnum version, Stream stream, bool leaveOpen = false)
     {
         WriteHeader(stream);
         using ZLibStream compressedStream = new(stream, CompressionLevel.SmallestSize, leaveOpen);
         using DataWriter writer = new(compressedStream, leaveOpen);
-        WriteToInternal(writer);
+        WriteToInternal(version, writer);
     }
 
-    public async Task WriteToAsync(Stream stream, bool leaveOpen = false, CancellationToken ctoken = default)
+    public async Task WriteToAsync(AnmVersionEnum version, Stream stream, bool leaveOpen = false, CancellationToken ctoken = default)
     {
         await WriteHeaderAsync(stream, ctoken);
         using ZLibStream compressedStream = new(stream, CompressionLevel.SmallestSize, leaveOpen);
         using DataWriter writer = new(compressedStream, leaveOpen);
-        await WriteToInternalAsync(writer, ctoken);
+        await WriteToInternalAsync(version, writer, ctoken);
     }
 
     internal static int ReadHeader(Stream stream)
@@ -60,13 +60,13 @@ public sealed class AnmFile
         return BinaryPrimitives.ReadInt32LittleEndian(buffer);
     }
 
-    internal static AnmFile CreateFromInternal(DataReader reader, int header)
+    internal static AnmFile CreateFromInternal(AnmVersionEnum version, DataReader reader, int header)
     {
         Dictionary<string, AnmClass> classes = [];
         while (reader.ReadBool())
         {
             string key = reader.ReadStr();
-            AnmClass @class = AnmClass.CreateFrom(reader);
+            AnmClass @class = AnmClass.CreateFrom(version, reader);
             classes[key] = @class;
         }
 
@@ -77,13 +77,13 @@ public sealed class AnmFile
         };
     }
 
-    internal static async Task<AnmFile> CreateFromInternalAsync(DataReader reader, int header, CancellationToken ctoken = default)
+    internal static async Task<AnmFile> CreateFromInternalAsync(AnmVersionEnum version, DataReader reader, int header, CancellationToken ctoken = default)
     {
         Dictionary<string, AnmClass> classes = [];
         while (await reader.ReadBoolAsync(ctoken))
         {
             string key = await reader.ReadStrAsync(ctoken);
-            AnmClass @class = await AnmClass.CreateFromAsync(reader, ctoken);
+            AnmClass @class = await AnmClass.CreateFromAsync(version, reader, ctoken);
             classes[key] = @class;
         }
 
@@ -108,24 +108,24 @@ public sealed class AnmFile
         await stream.WriteAsync(buffer, ctoken).ConfigureAwait(false);
     }
 
-    internal void WriteToInternal(DataWriter writer)
+    internal void WriteToInternal(AnmVersionEnum version, DataWriter writer)
     {
         foreach ((string key, AnmClass @class) in Classes)
         {
             writer.WriteBool(true);
             writer.WriteStr(key);
-            @class.WriteTo(writer);
+            @class.WriteTo(version, writer);
         }
         writer.WriteBool(false);
     }
 
-    internal async Task WriteToInternalAsync(DataWriter writer, CancellationToken ctoken = default)
+    internal async Task WriteToInternalAsync(AnmVersionEnum version, DataWriter writer, CancellationToken ctoken = default)
     {
         foreach ((string key, AnmClass @class) in Classes)
         {
             await writer.WriteBoolAsync(true, ctoken);
             await writer.WriteStrAsync(key, ctoken);
-            await @class.WriteToAsync(writer, ctoken);
+            await @class.WriteToAsync(version, writer, ctoken);
         }
         await writer.WriteBoolAsync(false, ctoken);
     }

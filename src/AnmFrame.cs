@@ -8,14 +8,15 @@ namespace WallyAnmSpinzor;
 // Official name: AnimFrame
 public sealed class AnmFrame
 {
-    public required short Id { get; set; }
+    public required uint Id { get; set; }
     public required (double X, double Y)? FireSocket { get; set; }
     public required (double X, double Y)? EBPlatformPos { get; set; } // unused
+    public required double EBPlatformRot { get; set; } // unused
     public required AnmBone[] Bones { get; set; }
 
-    internal static AnmFrame CreateFrom(DataReader reader, AnmFrame? prev)
+    internal static AnmFrame CreateFrom(AnmVersionEnum version, DataReader reader, AnmFrame? prev)
     {
-        short id = reader.ReadI16();
+        uint id = (uint)reader.ReadI16();
 
         (double x, double y)? fireSocket = null;
         if (reader.ReadBool())
@@ -32,6 +33,10 @@ public sealed class AnmFrame
             double y = reader.ReadF64();
             ebPlatformPos = (x, y);
         }
+
+        double ebPlatformRot = double.NaN;
+        if (version < AnmVersionEnum.From904ToCurrent)
+            ebPlatformRot = reader.ReadF64();
 
         short bonesCount = reader.ReadI16();
         AnmBone[] bones = new AnmBone[bonesCount];
@@ -45,11 +50,11 @@ public sealed class AnmFrame
                     throw new Exception("Bone duplication without matching bone in previous frame");
                 bones[i] = prev.Bones[i].Clone();
                 if (!reader.ReadBool())
-                    bones[i].Frame = reader.ReadI8();
+                    bones[i].Frame = reader.ReadBoneFrame(version);
             }
             else
             {
-                bones[i] = AnmBone.CreateFrom(reader, i > 0 ? bones[i - 1] : null);
+                bones[i] = AnmBone.CreateFrom(version, reader, i > 0 ? bones[i - 1] : null);
             }
         }
 
@@ -58,13 +63,14 @@ public sealed class AnmFrame
             Id = id,
             FireSocket = fireSocket,
             EBPlatformPos = ebPlatformPos,
+            EBPlatformRot = ebPlatformRot,
             Bones = bones,
         };
     }
 
-    internal static async Task<AnmFrame> CreateFromAsync(DataReader reader, AnmFrame? prev, CancellationToken ctoken = default)
+    internal static async Task<AnmFrame> CreateFromAsync(AnmVersionEnum version, DataReader reader, AnmFrame? prev, CancellationToken ctoken = default)
     {
-        short id = await reader.ReadI16Async(ctoken);
+        uint id = (uint)await reader.ReadI16Async(ctoken);
 
         (double x, double y)? fireSocket = null;
         if (await reader.ReadBoolAsync(ctoken))
@@ -82,6 +88,10 @@ public sealed class AnmFrame
             ebPlatformPos = (x, y);
         }
 
+        double ebPlatformRot = double.NaN;
+        if (version < AnmVersionEnum.From904ToCurrent)
+            ebPlatformRot = await reader.ReadF64Async(ctoken);
+
         short bonesCount = await reader.ReadI16Async(ctoken);
         AnmBone[] bones = new AnmBone[bonesCount];
         for (int i = 0; i < bonesCount; ++i)
@@ -94,11 +104,11 @@ public sealed class AnmFrame
                     throw new Exception("Bone duplication without matching bone in previous frame");
                 bones[i] = prev.Bones[i].Clone();
                 if (!await reader.ReadBoolAsync(ctoken))
-                    bones[i].Frame = await reader.ReadI8Async(ctoken);
+                    bones[i].Frame = await reader.ReadBoneFrameAsync(version, ctoken);
             }
             else
             {
-                bones[i] = await AnmBone.CreateFromAsync(reader, i > 0 ? bones[i - 1] : null, ctoken);
+                bones[i] = await AnmBone.CreateFromAsync(version, reader, i > 0 ? bones[i - 1] : null, ctoken);
             }
         }
 
@@ -107,13 +117,14 @@ public sealed class AnmFrame
             Id = id,
             FireSocket = fireSocket,
             EBPlatformPos = ebPlatformPos,
+            EBPlatformRot = ebPlatformRot,
             Bones = bones,
         };
     }
 
-    internal void WriteTo(DataWriter writer, AnmFrame? prevFrame)
+    internal void WriteTo(AnmVersionEnum version, DataWriter writer, AnmFrame? prevFrame)
     {
-        writer.WriteI16(Id);
+        writer.WriteI16((short)Id);
 
         if (FireSocket is null)
         {
@@ -137,6 +148,11 @@ public sealed class AnmFrame
             writer.WriteF64(EBPlatformPos.Value.Y);
         }
 
+        if (version < AnmVersionEnum.From904ToCurrent)
+        {
+            writer.WriteF64(EBPlatformRot);
+        }
+
         writer.WriteI16((short)Bones.Length);
         for (int i = 0; i < Bones.Length; ++i)
         {
@@ -150,20 +166,20 @@ public sealed class AnmFrame
                 else
                 {
                     writer.WriteBool(false);
-                    writer.WriteI8(Bones[i].Frame);
+                    writer.WriteBoneFrame(version, Bones[i].Frame);
                 }
             }
             else
             {
                 writer.WriteBool(false);
-                Bones[i].WriteTo(writer, i > 0 ? Bones[i - 1] : null);
+                Bones[i].WriteTo(version, writer, i > 0 ? Bones[i - 1] : null);
             }
         }
     }
 
-    internal async Task WriteToAsync(DataWriter writer, AnmFrame? prevFrame, CancellationToken ctoken = default)
+    internal async Task WriteToAsync(AnmVersionEnum version, DataWriter writer, AnmFrame? prevFrame, CancellationToken ctoken = default)
     {
-        await writer.WriteI16Async(Id, ctoken);
+        await writer.WriteI16Async((short)Id, ctoken);
 
         if (FireSocket is null)
         {
@@ -187,6 +203,11 @@ public sealed class AnmFrame
             await writer.WriteF64Async(EBPlatformPos.Value.Y, ctoken);
         }
 
+        if (version < AnmVersionEnum.From904ToCurrent)
+        {
+            await writer.WriteF64Async(EBPlatformRot, ctoken);
+        }
+
         await writer.WriteI16Async((short)Bones.Length, ctoken);
         for (int i = 0; i < Bones.Length; ++i)
         {
@@ -200,18 +221,18 @@ public sealed class AnmFrame
                 else
                 {
                     await writer.WriteBoolAsync(false, ctoken);
-                    await writer.WriteI8Async(Bones[i].Frame, ctoken);
+                    await writer.WriteBoneFrameAsync(version, Bones[i].Frame, ctoken);
                 }
             }
             else
             {
                 await writer.WriteBoolAsync(false, ctoken);
-                await Bones[i].WriteToAsync(writer, i > 0 ? Bones[i - 1] : null, ctoken);
+                await Bones[i].WriteToAsync(version, writer, i > 0 ? Bones[i - 1] : null, ctoken);
             }
         }
     }
 
-    internal uint GetByteCount(AnmFrame? prevFrame)
+    internal uint GetByteCount(AnmVersionEnum version, AnmFrame? prevFrame)
     {
         uint size = 0;
         size += sizeof(short); // id
@@ -221,6 +242,8 @@ public sealed class AnmFrame
         size += sizeof(byte); // EB_Platform indicator
         if (EBPlatformPos is not null)
             size += 2 * sizeof(double); // EB_Platform position
+        if (version < AnmVersionEnum.From904ToCurrent)
+            size += sizeof(double); // EB_Platform rotation
         size += sizeof(short); // bone count
         for (int i = 0; i < Bones.Length; ++i)
         {
@@ -230,11 +253,12 @@ public sealed class AnmFrame
                 size += sizeof(byte); // full copy indicator
                 // not a full copy
                 if (Bones[i].Frame != prevFrame.Bones[i].Frame)
-                    size += sizeof(sbyte); // frame override
+                    // frame override
+                    size += AnmBone.GetBoneFrameByteSize(version);
             }
             else
             {
-                size += Bones[i].GetByteCount(i > 0 ? Bones[i - 1] : null);
+                size += Bones[i].GetByteCount(version, i > 0 ? Bones[i - 1] : null);
             }
         }
         return size;

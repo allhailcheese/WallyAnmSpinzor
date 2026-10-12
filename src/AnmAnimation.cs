@@ -16,7 +16,7 @@ public sealed class AnmAnimation
     public required uint[] RunEndFrames { get; set; }
     public required AnmFrame[] Frames { get; set; }
 
-    internal static AnmAnimation CreateFrom(DataReader reader)
+    internal static AnmAnimation CreateFrom(AnmVersionEnum version, DataReader reader)
     {
         string name = reader.ReadStr();
         uint frameCount = reader.ReadU32();
@@ -38,7 +38,7 @@ public sealed class AnmAnimation
         for (int i = 0; i < frameCount; ++i)
         {
             AnmFrame? prevFrame = i == 0 ? null : frames[i - 1];
-            frames[i] = AnmFrame.CreateFrom(reader, prevFrame);
+            frames[i] = AnmFrame.CreateFrom(version, reader, prevFrame);
         }
 
         return new()
@@ -54,7 +54,7 @@ public sealed class AnmAnimation
         };
     }
 
-    internal static async Task<AnmAnimation> CreateFromAsync(DataReader reader, CancellationToken ctoken = default)
+    internal static async Task<AnmAnimation> CreateFromAsync(AnmVersionEnum version, DataReader reader, CancellationToken ctoken = default)
     {
         string name = await reader.ReadStrAsync(ctoken);
         uint frameCount = await reader.ReadU32Async(ctoken);
@@ -72,11 +72,12 @@ public sealed class AnmAnimation
         // this discarded value tells the game what's the size of the frames field.
         // this is used to be able to load the frames on-demand.
         _ = await reader.ReadU32Async(ctoken);
+
         AnmFrame[] frames = new AnmFrame[frameCount];
         for (int i = 0; i < frameCount; ++i)
         {
             AnmFrame? prevFrame = i == 0 ? null : frames[i - 1];
-            frames[i] = await AnmFrame.CreateFromAsync(reader, prevFrame, ctoken);
+            frames[i] = await AnmFrame.CreateFromAsync(version, reader, prevFrame, ctoken);
         }
 
         return new()
@@ -92,7 +93,7 @@ public sealed class AnmAnimation
         };
     }
 
-    internal void WriteTo(DataWriter writer)
+    internal void WriteTo(AnmVersionEnum version, DataWriter writer)
     {
         writer.WriteStr(Name);
         writer.WriteU32((uint)Frames.Length);
@@ -102,19 +103,19 @@ public sealed class AnmAnimation
         writer.WriteU32(PreviewFrame);
         writer.WriteU32(BaseStart);
         writer.WriteU32((uint)RunEndFrames.Length);
-        foreach (uint datum in RunEndFrames)
+        foreach (uint runEndFrame in RunEndFrames)
         {
-            writer.WriteU32(datum);
+            writer.WriteU32(runEndFrame);
         }
-        writer.WriteU32(GetFramesByteCount());
+        writer.WriteU32(GetFramesByteCount(version));
         for (int i = 0; i < Frames.Length; ++i)
         {
             AnmFrame? prevFrame = i == 0 ? null : Frames[i - 1];
-            Frames[i].WriteTo(writer, prevFrame);
+            Frames[i].WriteTo(version, writer, prevFrame);
         }
     }
 
-    internal async Task WriteToAsync(DataWriter writer, CancellationToken ctoken = default)
+    internal async Task WriteToAsync(AnmVersionEnum version, DataWriter writer, CancellationToken ctoken = default)
     {
         await writer.WriteStrAsync(Name, ctoken);
         await writer.WriteU32Async((uint)Frames.Length, ctoken);
@@ -124,25 +125,25 @@ public sealed class AnmAnimation
         await writer.WriteU32Async(PreviewFrame, ctoken);
         await writer.WriteU32Async(BaseStart, ctoken);
         await writer.WriteU32Async((uint)RunEndFrames.Length, ctoken);
-        foreach (uint datum in RunEndFrames)
+        foreach (uint runEndFrame in RunEndFrames)
         {
-            await writer.WriteU32Async(datum, ctoken);
+            await writer.WriteU32Async(runEndFrame, ctoken);
         }
-        await writer.WriteU32Async(GetFramesByteCount(), ctoken);
+        await writer.WriteU32Async(GetFramesByteCount(version), ctoken);
         for (int i = 0; i < Frames.Length; ++i)
         {
             AnmFrame? prevFrame = i == 0 ? null : Frames[i - 1];
-            await Frames[i].WriteToAsync(writer, prevFrame, ctoken);
+            await Frames[i].WriteToAsync(version, writer, prevFrame, ctoken);
         }
     }
 
-    internal uint GetFramesByteCount()
+    internal uint GetFramesByteCount(AnmVersionEnum version)
     {
         uint size = 0;
         for (int i = 0; i < Frames.Length; ++i)
         {
             AnmFrame? prevFrame = i == 0 ? null : Frames[i - 1];
-            size += Frames[i].GetByteCount(prevFrame);
+            size += Frames[i].GetByteCount(version, prevFrame);
         }
         return size;
     }
