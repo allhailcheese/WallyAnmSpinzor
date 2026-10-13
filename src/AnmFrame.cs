@@ -16,7 +16,7 @@ public sealed class AnmFrame
 
     internal static AnmFrame CreateFrom(AnmVersionEnum version, DataReader reader, AnmFrame? prev)
     {
-        uint id = (uint)reader.ReadI16();
+        uint id = reader.ReadFrameId(version);
 
         (double x, double y)? fireSocket = null;
         if (reader.ReadBool())
@@ -38,11 +38,11 @@ public sealed class AnmFrame
         if (version < AnmVersionEnum.From904ToCurrent)
             ebPlatformRot = reader.ReadF64();
 
-        short bonesCount = reader.ReadI16();
+        int bonesCount = reader.ReadBoneCount(version);
         AnmBone[] bones = new AnmBone[bonesCount];
         for (int i = 0; i < bonesCount; ++i)
         {
-            if (reader.ReadBool())
+            if (version >= AnmVersionEnum.From703To704 && reader.ReadBool())
             {
                 if (prev is null)
                     throw new Exception("Bone duplication in first animation frame");
@@ -70,7 +70,7 @@ public sealed class AnmFrame
 
     internal static async Task<AnmFrame> CreateFromAsync(AnmVersionEnum version, DataReader reader, AnmFrame? prev, CancellationToken ctoken = default)
     {
-        uint id = (uint)await reader.ReadI16Async(ctoken);
+        uint id = await reader.ReadFrameIdAsync(version, ctoken);
 
         (double x, double y)? fireSocket = null;
         if (await reader.ReadBoolAsync(ctoken))
@@ -92,11 +92,11 @@ public sealed class AnmFrame
         if (version < AnmVersionEnum.From904ToCurrent)
             ebPlatformRot = await reader.ReadF64Async(ctoken);
 
-        short bonesCount = await reader.ReadI16Async(ctoken);
+        int bonesCount = await reader.ReadBoneCountAsync(version, ctoken);
         AnmBone[] bones = new AnmBone[bonesCount];
         for (int i = 0; i < bonesCount; ++i)
         {
-            if (await reader.ReadBoolAsync(ctoken))
+            if (version >= AnmVersionEnum.From703To704 && await reader.ReadBoolAsync(ctoken))
             {
                 if (prev is null)
                     throw new Exception("Bone duplication in first animation frame");
@@ -124,7 +124,7 @@ public sealed class AnmFrame
 
     internal void WriteTo(AnmVersionEnum version, DataWriter writer, AnmFrame? prevFrame)
     {
-        writer.WriteI16((short)Id);
+        writer.WriteFrameId(version, Id);
 
         if (FireSocket is null)
         {
@@ -153,13 +153,18 @@ public sealed class AnmFrame
             writer.WriteF64(EBPlatformRot);
         }
 
-        writer.WriteI16((short)Bones.Length);
+        writer.WriteBoneCount(version, Bones.Length);
         for (int i = 0; i < Bones.Length; ++i)
         {
-            if (prevFrame is not null && i < prevFrame.Bones.Length && Bones[i].IsPartialCloneOf(prevFrame.Bones[i]))
+            bool canCloneFromPrev = prevFrame is not null &&
+                i < prevFrame.Bones.Length &&
+                Bones[i].IsPartialCloneOf(prevFrame.Bones[i]);
+
+            if (version >= AnmVersionEnum.From703To704)
+                writer.WriteBool(canCloneFromPrev);
+            if (version >= AnmVersionEnum.From703To704 && canCloneFromPrev)
             {
-                writer.WriteBool(true);
-                if (Bones[i].Frame == prevFrame.Bones[i].Frame)
+                if (Bones[i].Frame == prevFrame!.Bones[i].Frame)
                 {
                     writer.WriteBool(true);
                 }
@@ -171,7 +176,6 @@ public sealed class AnmFrame
             }
             else
             {
-                writer.WriteBool(false);
                 Bones[i].WriteTo(version, writer, i > 0 ? Bones[i - 1] : null);
             }
         }
@@ -179,7 +183,7 @@ public sealed class AnmFrame
 
     internal async Task WriteToAsync(AnmVersionEnum version, DataWriter writer, AnmFrame? prevFrame, CancellationToken ctoken = default)
     {
-        await writer.WriteI16Async((short)Id, ctoken);
+        await writer.WriteFrameIdAsync(version, Id, ctoken);
 
         if (FireSocket is null)
         {
@@ -208,13 +212,18 @@ public sealed class AnmFrame
             await writer.WriteF64Async(EBPlatformRot, ctoken);
         }
 
-        await writer.WriteI16Async((short)Bones.Length, ctoken);
+        await writer.WriteBoneCountAsync(version, Bones.Length, ctoken);
         for (int i = 0; i < Bones.Length; ++i)
         {
-            if (prevFrame is not null && i < prevFrame.Bones.Length && Bones[i].IsPartialCloneOf(prevFrame.Bones[i]))
+            bool canCloneFromPrev = prevFrame is not null &&
+                i < prevFrame.Bones.Length &&
+                Bones[i].IsPartialCloneOf(prevFrame.Bones[i]);
+
+            if (version >= AnmVersionEnum.From703To704)
+                await writer.WriteBoolAsync(canCloneFromPrev, ctoken);
+            if (version >= AnmVersionEnum.From703To704 && canCloneFromPrev)
             {
-                await writer.WriteBoolAsync(true, ctoken);
-                if (Bones[i].Frame == prevFrame.Bones[i].Frame)
+                if (Bones[i].Frame == prevFrame!.Bones[i].Frame)
                 {
                     await writer.WriteBoolAsync(true, ctoken);
                 }
@@ -226,7 +235,6 @@ public sealed class AnmFrame
             }
             else
             {
-                await writer.WriteBoolAsync(false, ctoken);
                 await Bones[i].WriteToAsync(version, writer, i > 0 ? Bones[i - 1] : null, ctoken);
             }
         }
@@ -235,7 +243,7 @@ public sealed class AnmFrame
     internal uint GetByteCount(AnmVersionEnum version, AnmFrame? prevFrame)
     {
         uint size = 0;
-        size += sizeof(short); // id
+        size += GetFrameIdByteSize(version); // id
         size += sizeof(byte); // FireSocket indicator
         if (FireSocket is not null)
             size += 2 * sizeof(double); // FireSocket
@@ -244,13 +252,22 @@ public sealed class AnmFrame
             size += 2 * sizeof(double); // EB_Platform position
         if (version < AnmVersionEnum.From904ToCurrent)
             size += sizeof(double); // EB_Platform rotation
-        size += sizeof(short); // bone count
+        size += GetBoneCountByteSize(version); // bone count
         for (int i = 0; i < Bones.Length; ++i)
         {
-            size += sizeof(byte); // prev frame bone copy indicator
-            if (prevFrame is not null && i < prevFrame.Bones.Length && Bones[i].IsPartialCloneOf(prevFrame.Bones[i]))
+            // prev frame bone copy indicator
+            if (version >= AnmVersionEnum.From703To704)
+                size += sizeof(byte);
+            // check copy from prev frame
+            if (
+                version >= AnmVersionEnum.From703To704 &&
+                prevFrame is not null &&
+                i < prevFrame.Bones.Length &&
+                Bones[i].IsPartialCloneOf(prevFrame.Bones[i])
+            )
             {
-                size += sizeof(byte); // full copy indicator
+                // full copy indicator
+                size += sizeof(byte);
                 // not a full copy
                 if (Bones[i].Frame != prevFrame.Bones[i].Frame)
                     // frame override
@@ -262,5 +279,29 @@ public sealed class AnmFrame
             }
         }
         return size;
+    }
+
+    internal static uint GetFrameIdByteSize(AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return sizeof(short);
+        }
+        else
+        {
+            return sizeof(uint);
+        }
+    }
+
+    internal static uint GetBoneCountByteSize(AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return sizeof(short);
+        }
+        else
+        {
+            return sizeof(uint);
+        }
     }
 }

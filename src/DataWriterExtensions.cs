@@ -53,4 +53,76 @@ internal static class DataWriterExtensions
             await writer.WriteF64Async(value, ctoken);
         }
     }
+
+    internal static void WriteFrameId(this DataWriter writer, AnmVersionEnum version, uint value)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            writer.WriteI16((short)value);
+        }
+        else
+        {
+            writer.WriteU32(value);
+        }
+    }
+
+    internal static async ValueTask WriteFrameIdAsync(this DataWriter writer, AnmVersionEnum version, uint value, CancellationToken ctoken = default)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            await writer.WriteI16Async((short)value, ctoken);
+        }
+        else
+        {
+            await writer.WriteU32Async(value, ctoken);
+        }
+    }
+
+    internal static void WriteBoneCount(this DataWriter writer, AnmVersionEnum version, int value)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            writer.WriteI16((short)value);
+        }
+        else
+        {
+            writer.WriteU32((uint)value);
+        }
+    }
+
+    internal static async ValueTask WriteBoneCountAsync(this DataWriter writer, AnmVersionEnum version, int value, CancellationToken ctoken = default)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            await writer.WriteI16Async((short)value, ctoken);
+        }
+        else
+        {
+            await writer.WriteU32Async((uint)value, ctoken);
+        }
+    }
+
+    internal static void WriteBoneOpacity(this DataWriter writer, AnmVersionEnum version, double value)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            writer.WriteU8((byte)(value * 255));
+        }
+        else
+        {
+            writer.WriteF64(value);
+        }
+    }
+
+    internal static async ValueTask WriteBoneOpacityAsync(this DataWriter writer, AnmVersionEnum version, double value, CancellationToken ctoken = default)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            await writer.WriteU8Async((byte)(value * 255), ctoken);
+        }
+        else
+        {
+            await writer.WriteF64Async(value, ctoken);
+        }
+    }
 }

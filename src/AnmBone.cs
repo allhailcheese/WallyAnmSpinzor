@@ -21,8 +21,45 @@ public sealed class AnmBone
     internal static AnmBone CreateFrom(AnmVersionEnum version, DataReader reader, AnmBone? prev)
     {
         uint id = (uint)reader.ReadI16();
-        bool opaque = reader.ReadBool();
+        bool opaque = version >= AnmVersionEnum.From703To704 && reader.ReadBool();
 
+        double scaleX, rotateSkew0, rotateSkew1, scaleY, x, y;
+        // bmg why did you swap the order
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            (scaleX, rotateSkew0, rotateSkew1, scaleY) = ReadTransform(version, reader, prev);
+            (x, y) = ReadPosition(version, reader, prev);
+        }
+        else
+        {
+            (x, y) = ReadPosition(version, reader, prev);
+            (scaleX, rotateSkew0, rotateSkew1, scaleY) = ReadTransform(version, reader, prev);
+        }
+
+        short frame = 1;
+        if (version < AnmVersionEnum.From904ToCurrent || reader.ReadBool())
+            frame = reader.ReadBoneFrame(version);
+
+        double opacity = 1.0;
+        if (!opaque)
+            opacity = reader.ReadBoneOpacity(version);
+
+        return new()
+        {
+            Id = id,
+            ScaleX = scaleX,
+            RotateSkew0 = rotateSkew0,
+            RotateSkew1 = rotateSkew1,
+            ScaleY = scaleY,
+            X = x,
+            Y = y,
+            Opacity = opacity,
+            Frame = frame,
+        };
+    }
+
+    internal static (double scaleX, double rotateSkew0, double rotateSkew1, double scaleY) ReadTransform(AnmVersionEnum version, DataReader reader, AnmBone? prev)
+    {
         double scaleX, rotateSkew0, rotateSkew1, scaleY;
         // copy transform from prev
         if (version >= AnmVersionEnum.From904ToCurrent && reader.ReadBool())
@@ -38,7 +75,7 @@ public sealed class AnmBone
         {
             bool identity = false;
             bool symmetric = false;
-            if (reader.ReadBool())
+            if (version >= AnmVersionEnum.From703To704 && reader.ReadBool())
             {
                 if (reader.ReadBool()) identity = true;
                 else symmetric = true;
@@ -65,7 +102,11 @@ public sealed class AnmBone
                 }
             }
         }
+        return (scaleX, rotateSkew0, rotateSkew1, scaleY);
+    }
 
+    internal static (double x, double y) ReadPosition(AnmVersionEnum version, DataReader reader, AnmBone? prev)
+    {
         double x, y;
         // copy position from prev
         if (version >= AnmVersionEnum.From904ToCurrent && reader.ReadBool())
@@ -80,14 +121,34 @@ public sealed class AnmBone
             x = reader.ReadBoneTransform(version);
             y = reader.ReadBoneTransform(version);
         }
+        return (x, y);
+    }
+
+    internal static async Task<AnmBone> CreateFromAsync(AnmVersionEnum version, DataReader reader, AnmBone? prev, CancellationToken ctoken = default)
+    {
+        uint id = (uint)await reader.ReadI16Async(ctoken);
+        bool opaque = version >= AnmVersionEnum.From703To704 && await reader.ReadBoolAsync(ctoken);
+
+        double scaleX, rotateSkew0, rotateSkew1, scaleY, x, y;
+        // bmg why did you swap the order
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            (scaleX, rotateSkew0, rotateSkew1, scaleY) = await ReadTransformAsync(version, reader, prev, ctoken);
+            (x, y) = await ReadPositionAsync(version, reader, prev, ctoken);
+        }
+        else
+        {
+            (x, y) = await ReadPositionAsync(version, reader, prev, ctoken);
+            (scaleX, rotateSkew0, rotateSkew1, scaleY) = await ReadTransformAsync(version, reader, prev, ctoken);
+        }
 
         short frame = 1;
-        if (version < AnmVersionEnum.From904ToCurrent || reader.ReadBool())
-            frame = reader.ReadBoneFrame(version);
+        if (version < AnmVersionEnum.From904ToCurrent || await reader.ReadBoolAsync(ctoken))
+            frame = await reader.ReadBoneFrameAsync(version, ctoken);
 
         double opacity = 1.0;
         if (!opaque)
-            opacity = reader.ReadU8() / 255.0;
+            opacity = await reader.ReadBoneOpacityAsync(version, ctoken);
 
         return new()
         {
@@ -103,11 +164,8 @@ public sealed class AnmBone
         };
     }
 
-    internal static async Task<AnmBone> CreateFromAsync(AnmVersionEnum version, DataReader reader, AnmBone? prev, CancellationToken ctoken = default)
+    internal static async Task<(double scaleX, double rotateSkew0, double rotateSkew1, double scaleY)> ReadTransformAsync(AnmVersionEnum version, DataReader reader, AnmBone? prev, CancellationToken ctoken = default)
     {
-        uint id = (uint)await reader.ReadI16Async(ctoken);
-        bool opaque = await reader.ReadBoolAsync(ctoken);
-
         double scaleX, rotateSkew0, rotateSkew1, scaleY;
         // copy transform from prev
         if (version >= AnmVersionEnum.From904ToCurrent && await reader.ReadBoolAsync(ctoken))
@@ -123,7 +181,7 @@ public sealed class AnmBone
         {
             bool identity = false;
             bool symmetric = false;
-            if (await reader.ReadBoolAsync(ctoken))
+            if (version >= AnmVersionEnum.From703To704 && await reader.ReadBoolAsync(ctoken))
             {
                 if (await reader.ReadBoolAsync(ctoken)) identity = true;
                 else symmetric = true;
@@ -150,7 +208,11 @@ public sealed class AnmBone
                 }
             }
         }
+        return (scaleX, rotateSkew0, rotateSkew1, scaleY);
+    }
 
+    internal static async Task<(double x, double y)> ReadPositionAsync(AnmVersionEnum version, DataReader reader, AnmBone? prev, CancellationToken ctoken = default)
+    {
         double x, y;
         // copy position from prev
         if (version >= AnmVersionEnum.From904ToCurrent && await reader.ReadBoolAsync(ctoken))
@@ -165,49 +227,51 @@ public sealed class AnmBone
             x = await reader.ReadBoneTransformAsync(version, ctoken);
             y = await reader.ReadBoneTransformAsync(version, ctoken);
         }
-
-        short frame = 1;
-        if (version < AnmVersionEnum.From904ToCurrent || await reader.ReadBoolAsync(ctoken))
-            frame = await reader.ReadBoneFrameAsync(version, ctoken);
-
-        double opacity = 1.0;
-        if (!opaque)
-            opacity = await reader.ReadU8Async(ctoken) / 255.0;
-
-        return new()
-        {
-            Id = id,
-            ScaleX = scaleX,
-            RotateSkew0 = rotateSkew0,
-            RotateSkew1 = rotateSkew1,
-            ScaleY = scaleY,
-            X = x,
-            Y = y,
-            Opacity = opacity,
-            Frame = frame,
-        };
+        return (x, y);
     }
 
     internal void WriteTo(AnmVersionEnum version, DataWriter writer, AnmBone? prev)
     {
         writer.WriteI16((short)Id);
-        writer.WriteBool(Opacity == 1);
+        if (version >= AnmVersionEnum.From703To704)
+            writer.WriteBool(Opacity == 1);
 
+        // bmg why did you swap the order
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            WriteTransform(version, writer, prev);
+            WritePosition(version, writer, prev);
+        }
+        else
+        {
+            WritePosition(version, writer, prev);
+            WriteTransform(version, writer, prev);
+        }
+
+        bool canDefaultFrame = Frame == 1;
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            writer.WriteBool(canDefaultFrame);
+        if (version < AnmVersionEnum.From904ToCurrent || !canDefaultFrame)
+            writer.WriteBoneFrame(version, Frame);
+
+        if (version < AnmVersionEnum.From703To704 || Opacity != 1)
+            writer.WriteBoneOpacity(version, Opacity);
+    }
+
+    internal void WriteTransform(AnmVersionEnum version, DataWriter writer, AnmBone? prev)
+    {
         bool canCopyTransform = prev is not null && HasSameTransformAs(prev);
         if (version >= AnmVersionEnum.From904ToCurrent)
             writer.WriteBool(canCopyTransform);
         if (version < AnmVersionEnum.From904ToCurrent || !canCopyTransform)
         {
-            bool identity = IsIdentity;
-            bool symmetric = IsSymmetric;
-            if (identity || symmetric)
+            bool identity = version >= AnmVersionEnum.From703To704 && IsIdentity;
+            bool symmetric = version >= AnmVersionEnum.From703To704 && IsSymmetric;
+            if (version >= AnmVersionEnum.From703To704)
             {
-                writer.WriteBool(true);
-                writer.WriteBool(identity);
-            }
-            else
-            {
-                writer.WriteBool(false);
+                writer.WriteBool(identity || symmetric);
+                if (identity || symmetric)
+                    writer.WriteBool(identity);
             }
 
             if (!identity)
@@ -221,7 +285,10 @@ public sealed class AnmBone
                 }
             }
         }
+    }
 
+    internal void WritePosition(AnmVersionEnum version, DataWriter writer, AnmBone? prev)
+    {
         bool canCopyPosition = prev is not null && HasSamePositionAs(prev);
         if (version >= AnmVersionEnum.From904ToCurrent)
             writer.WriteBool(canCopyPosition);
@@ -230,40 +297,51 @@ public sealed class AnmBone
             writer.WriteBoneTransform(version, X);
             writer.WriteBoneTransform(version, Y);
         }
-
-        bool canDefaultFrame = Frame == 1;
-        if (version >= AnmVersionEnum.From904ToCurrent)
-            writer.WriteBool(canDefaultFrame);
-        if (version < AnmVersionEnum.From904ToCurrent || !canDefaultFrame)
-            writer.WriteBoneFrame(version, Frame);
-
-        if (Opacity != 1)
-        {
-            byte opacity = (byte)Math.Round(Opacity * 255);
-            writer.WriteU8(opacity);
-        }
     }
 
     internal async Task WriteToAsync(AnmVersionEnum version, DataWriter writer, AnmBone? prev, CancellationToken ctoken = default)
     {
         await writer.WriteI16Async((short)Id, ctoken);
-        await writer.WriteBoolAsync(Opacity == 1, ctoken);
+        if (version >= AnmVersionEnum.From703To704)
+            await writer.WriteBoolAsync(Opacity == 1, ctoken);
 
+        // bmg why did you swap the order
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            await WriteTransformAsync(version, writer, prev, ctoken);
+            await WritePositionAsync(version, writer, prev, ctoken);
+        }
+        else
+        {
+            await WritePositionAsync(version, writer, prev, ctoken);
+            await WriteTransformAsync(version, writer, prev, ctoken);
+        }
+
+        bool canDefaultFrame = Frame == 1;
+        if (version >= AnmVersionEnum.From904ToCurrent)
+            await writer.WriteBoolAsync(canDefaultFrame, ctoken);
+        if (version < AnmVersionEnum.From904ToCurrent || !canDefaultFrame)
+            await writer.WriteBoneFrameAsync(version, Frame, ctoken);
+
+        if (version < AnmVersionEnum.From703To704 || Opacity != 1)
+            await writer.WriteBoneOpacityAsync(version, Opacity, ctoken);
+    }
+
+
+    internal async Task WriteTransformAsync(AnmVersionEnum version, DataWriter writer, AnmBone? prev, CancellationToken ctoken = default)
+    {
         bool canCopyTransform = prev is not null && HasSameTransformAs(prev);
         if (version >= AnmVersionEnum.From904ToCurrent)
             await writer.WriteBoolAsync(canCopyTransform, ctoken);
         if (version < AnmVersionEnum.From904ToCurrent || !canCopyTransform)
         {
-            bool identity = IsIdentity;
-            bool symmetric = IsSymmetric;
-            if (identity || symmetric)
+            bool identity = version >= AnmVersionEnum.From703To704 && IsIdentity;
+            bool symmetric = version >= AnmVersionEnum.From703To704 && IsSymmetric;
+            if (version >= AnmVersionEnum.From703To704)
             {
-                await writer.WriteBoolAsync(true, ctoken);
-                await writer.WriteBoolAsync(identity, ctoken);
-            }
-            else
-            {
-                await writer.WriteBoolAsync(false, ctoken);
+                await writer.WriteBoolAsync(identity || symmetric, ctoken);
+                if (identity || symmetric)
+                    await writer.WriteBoolAsync(identity, ctoken);
             }
 
             if (!identity)
@@ -277,7 +355,10 @@ public sealed class AnmBone
                 }
             }
         }
+    }
 
+    internal async Task WritePositionAsync(AnmVersionEnum version, DataWriter writer, AnmBone? prev, CancellationToken ctoken = default)
+    {
         bool canCopyPosition = prev is not null && HasSamePositionAs(prev);
         if (version >= AnmVersionEnum.From904ToCurrent)
             await writer.WriteBoolAsync(canCopyPosition, ctoken);
@@ -286,25 +367,14 @@ public sealed class AnmBone
             await writer.WriteBoneTransformAsync(version, X, ctoken);
             await writer.WriteBoneTransformAsync(version, Y, ctoken);
         }
-
-        bool canDefaultFrame = Frame == 1;
-        if (version >= AnmVersionEnum.From904ToCurrent)
-            await writer.WriteBoolAsync(canDefaultFrame, ctoken);
-        if (version < AnmVersionEnum.From904ToCurrent || !canDefaultFrame)
-            await writer.WriteBoneFrameAsync(version, Frame, ctoken);
-
-        if (Opacity != 1)
-        {
-            byte opacity = (byte)Math.Round(Opacity * 255);
-            await writer.WriteU8Async(opacity, ctoken);
-        }
     }
 
     internal uint GetByteCount(AnmVersionEnum version, AnmBone? prev)
     {
         uint size = 0;
         size += sizeof(ushort); // id
-        size += sizeof(byte); // opaque
+        if (version >= AnmVersionEnum.From703To704)
+            size += sizeof(byte); // opaque
 
         // copy transform indicator
         if (version >= AnmVersionEnum.From904ToCurrent)
@@ -312,20 +382,19 @@ public sealed class AnmBone
         // can't copy transform
         if (version < AnmVersionEnum.From904ToCurrent || prev is null || !HasSameTransformAs(prev))
         {
-            size += sizeof(byte); // identity/symmetric indicator
-            if (IsIdentity)
+            if (version >= AnmVersionEnum.From703To704)
             {
-                size += sizeof(byte); // 2nd indicator
+                // identity/symmetric indicator
+                size += sizeof(byte);
+                // 2nd indicator
+                if (IsIdentity || IsSymmetric)
+                    size += sizeof(byte);
             }
-            else
+            if (version < AnmVersionEnum.From703To704 || !IsIdentity)
             {
                 size += GetBoneTransformByteSize(version); // scaleX
                 size += GetBoneTransformByteSize(version); // rotateSkew0
-                if (IsSymmetric)
-                {
-                    size += sizeof(byte); // 2nd indicator
-                }
-                else
+                if (version < AnmVersionEnum.From703To704 || !IsSymmetric)
                 {
                     size += GetBoneTransformByteSize(version); // rotateSkew1
                     size += GetBoneTransformByteSize(version); // scaleY
@@ -349,7 +418,8 @@ public sealed class AnmBone
         if (version < AnmVersionEnum.From904ToCurrent || Frame != 1)
             size += GetBoneFrameByteSize(version); // frame
 
-        if (Opacity != 1) size += sizeof(byte); // opacity
+        if (version < AnmVersionEnum.From703To704 || Opacity != 1)
+            size += GetBoneOpacityByteSize(version); // opacity
 
         return size;
     }
@@ -371,6 +441,18 @@ public sealed class AnmBone
         if (version >= AnmVersionEnum.From710To904)
         {
             return sizeof(float);
+        }
+        else
+        {
+            return sizeof(double);
+        }
+    }
+
+    internal static uint GetBoneOpacityByteSize(AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return sizeof(byte);
         }
         else
         {

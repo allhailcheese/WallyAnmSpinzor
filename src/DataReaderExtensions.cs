@@ -53,4 +53,76 @@ internal static class DataReaderExtensions
             return await reader.ReadF64Async(ctoken);
         }
     }
+
+    internal static uint ReadFrameId(this DataReader reader, AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return (uint)reader.ReadI16();
+        }
+        else
+        {
+            return reader.ReadU32();
+        }
+    }
+
+    internal static async ValueTask<uint> ReadFrameIdAsync(this DataReader reader, AnmVersionEnum version, CancellationToken ctoken)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return (uint)await reader.ReadI16Async(ctoken);
+        }
+        else
+        {
+            return await reader.ReadU32Async(ctoken);
+        }
+    }
+
+    internal static int ReadBoneCount(this DataReader reader, AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return reader.ReadI16();
+        }
+        else
+        {
+            return (int)reader.ReadU32();
+        }
+    }
+
+    internal static async ValueTask<int> ReadBoneCountAsync(this DataReader reader, AnmVersionEnum version, CancellationToken ctoken)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return await reader.ReadI16Async(ctoken);
+        }
+        else
+        {
+            return (int)await reader.ReadU32Async(ctoken);
+        }
+    }
+
+    internal static double ReadBoneOpacity(this DataReader reader, AnmVersionEnum version)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return reader.ReadU8() / 255.0;
+        }
+        else
+        {
+            return reader.ReadF64();
+        }
+    }
+
+    internal static async ValueTask<double> ReadBoneOpacityAsync(this DataReader reader, AnmVersionEnum version, CancellationToken ctoken)
+    {
+        if (version >= AnmVersionEnum.From703To704)
+        {
+            return await reader.ReadU8Async(ctoken) / 255.0;
+        }
+        else
+        {
+            return await reader.ReadF64Async(ctoken);
+        }
+    }
 }
